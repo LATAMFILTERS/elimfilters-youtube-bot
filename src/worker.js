@@ -2,7 +2,7 @@ import { createNvidiaClient } from "./nvidia.js";
 import { createYoutubeClient } from "./youtube.js";
 
 export function createWorker({ config, db }) {
-  const nvidia = createNvidiaClient({ apiKey: config.nvidiaApiKey, model: config.nvidiaModel });
+  const nvidia = createNvidiaClient({ apiKey: config.nvidiaApiKey, model: config.nvidiaModel, pool: db.pool });
   const youtube = createYoutubeClient({ apiKey: config.youtubeApiKey, channelId: config.youtubeChannelId });
 
   return {
