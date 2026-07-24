@@ -10,12 +10,28 @@ export function createDb(connectionString) {
     pool,
     async init() {
       await pool.query(`
+        CREATE TABLE IF NOT EXISTS b2b_distributor_leads (
+          id SERIAL PRIMARY KEY,
+          source_channel TEXT NOT NULL,
+          company_name TEXT,
+          contact_name TEXT,
+          phone_or_email TEXT,
+          country TEXT,
+          city TEXT,
+          estimated_volume TEXT,
+          notes TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `);
+
+      await pool.query(`
         CREATE TABLE IF NOT EXISTS youtube_jobs (
-          comment_id TEXT PRIMARY KEY,
-          video_id TEXT,
-          comment_text TEXT NOT NULL,
+          event_id TEXT PRIMARY KEY,
+          event_type TEXT NOT NULL DEFAULT 'comment',
+          message_text TEXT NOT NULL,
+          author_channel_id TEXT,
           author_name TEXT,
-          author_channel_url TEXT,
+          video_id TEXT,
           status TEXT NOT NULL DEFAULT 'pending',
           attempts INTEGER NOT NULL DEFAULT 0,
           response_text TEXT,
@@ -28,18 +44,37 @@ export function createDb(connectionString) {
 
     async enqueue(e) {
       const r = await pool.query(
-        `INSERT INTO youtube_jobs (comment_id, video_id, comment_text, author_name, author_channel_url)
-         VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (comment_id) DO NOTHING`,
-        [e.id, e.videoId || '', e.text, e.authorName || 'YouTube User', e.authorUrl || '']
+        `INSERT INTO youtube_jobs (event_id, event_type, message_text, author_channel_id, author_name, video_id)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (event_id) DO NOTHING`,
+        [e.id, e.type || 'comment', e.text, e.authorChannelId, e.authorName, e.videoId]
       );
       return r.rowCount === 1;
+    },
+
+    async recordB2BLead(lead) {
+      const r = await pool.query(
+        `INSERT INTO b2b_distributor_leads (source_channel, company_name, contact_name, phone_or_email, country, city, estimated_volume, notes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id`,
+        [
+          lead.sourceChannel || 'youtube',
+          lead.companyName || null,
+          lead.contactName || null,
+          lead.phoneOrEmail || null,
+          lead.country || null,
+          lead.city || null,
+          lead.estimatedVolume || null,
+          lead.notes || null
+        ]
+      );
+      return r.rows[0].id;
     },
 
     async claim(limit = 3) {
       const r = await pool.query(
         `WITH selected AS (
-           SELECT comment_id FROM youtube_jobs
+           SELECT event_id FROM youtube_jobs
            WHERE status = 'pending' AND attempts < 3
            ORDER BY created_at
            FOR UPDATE SKIP LOCKED
@@ -48,7 +83,7 @@ export function createDb(connectionString) {
          UPDATE youtube_jobs j
          SET status = 'processing', attempts = attempts + 1
          FROM selected
-         WHERE j.comment_id = selected.comment_id
+         WHERE j.event_id = selected.event_id
          RETURNING j.*`,
         [limit]
       );
@@ -59,7 +94,7 @@ export function createDb(connectionString) {
       await pool.query(
         `UPDATE youtube_jobs
          SET status = 'completed', response_text = $2, processed_at = NOW(), error_text = NULL
-         WHERE comment_id = $1`,
+         WHERE event_id = $1`,
         [id, response]
       );
     },
@@ -69,7 +104,7 @@ export function createDb(connectionString) {
         `UPDATE youtube_jobs
          SET status = CASE WHEN attempts >= 3 THEN 'failed' ELSE 'pending' END,
              error_text = $2
-         WHERE comment_id = $1`,
+         WHERE event_id = $1`,
         [id, String(error).slice(0, 1000)]
       );
     },
