@@ -8,7 +8,7 @@ function requireValue(name, val) {
 export function getConfig() {
   return {
     port: parseInt(process.env.PORT || "10000", 10),
-    youtubeChannelId: process.env.YOUTUBE_CHANNEL_ID || "",
+    youtubeChannelId: process.env.YOUTUBE_CHANNEL_ID || "@elimfilters9112",
     youtubeApiKey: process.env.YOUTUBE_API_KEY || "",
     youtubeVerifyToken: process.env.YOUTUBE_VERIFY_TOKEN || "elimfilters_youtube_webhook_verify_2026",
     databaseUrl: requireValue("DATABASE_URL", process.env.DATABASE_URL || "postgres://localhost:5432/elimfilters"),

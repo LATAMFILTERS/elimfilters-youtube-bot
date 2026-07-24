@@ -10,7 +10,7 @@ services:
       - key: NODE_VERSION
         value: "20"
       - key: YOUTUBE_CHANNEL_ID
-        value: "UC_elimfilters_official"
+        value: "@elimfilters9112"
       - key: YOUTUBE_API_KEY
         sync: false
       - key: YOUTUBE_VERIFY_TOKEN
