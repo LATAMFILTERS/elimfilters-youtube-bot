@@ -3,7 +3,13 @@ import { createYoutubeClient } from "./youtube.js";
 
 export function createWorker({ config, db }) {
   const nvidia = createNvidiaClient({ apiKey: config.nvidiaApiKey, model: config.nvidiaModel, pool: db.pool });
-  const youtube = createYoutubeClient({ apiKey: config.youtubeApiKey, channelId: config.youtubeChannelId });
+  const youtube = createYoutubeClient({
+    apiKey: config.youtubeApiKey,
+    channelId: config.youtubeChannelId,
+    oauthClientId: config.youtubeOauthClientId,
+    oauthClientSecret: config.youtubeOauthClientSecret,
+    oauthRefreshToken: config.youtubeOauthRefreshToken
+  });
 
   return {
     async run() {

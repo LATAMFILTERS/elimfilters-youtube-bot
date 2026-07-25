@@ -1,16 +1,55 @@
-export function createYoutubeClient({ apiKey, channelId }) {
+export function createYoutubeClient({ apiKey, channelId, oauthClientId, oauthClientSecret, oauthRefreshToken }) {
+  let cachedToken = null; // { accessToken, expiresAt }
+
+  async function getAccessToken() {
+    if (cachedToken && cachedToken.expiresAt > Date.now() + 60000) {
+      return cachedToken.accessToken;
+    }
+    const res = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: oauthClientId,
+        client_secret: oauthClientSecret,
+        refresh_token: oauthRefreshToken,
+        grant_type: "refresh_token"
+      })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.access_token) {
+      throw new Error(`YouTube OAuth token refresh failed: ${res.status} ${data.error_description || data.error || "unknown error"}`);
+    }
+    cachedToken = {
+      accessToken: data.access_token,
+      expiresAt: Date.now() + (data.expires_in || 3600) * 1000
+    };
+    return cachedToken.accessToken;
+  }
+
   return {
-    async replyToComment() {
-      // YouTube Data API v3 comments.insert requires an OAuth2 access token
-      // with youtube.force-ssl scope - a plain API key (read-only) cannot
-      // authenticate this call. No OAuth credentials are configured for
-      // this bot, so posting is not actually possible yet. This used to
-      // unconditionally return {success:true} without ever calling the
-      // API, which made worker.js mark jobs "completed" for replies that
-      // were never sent to YouTube. Throw instead so the caller's
-      // catch block runs db.fail() and the job is retried/surfaced
-      // truthfully rather than silently swallowed as a fake success.
-      throw new Error("YouTube reply publishing is not configured: comments.insert requires an OAuth2 access token, which is not set up for this bot");
+    async replyToComment({ commentId, replyText }) {
+      if (!oauthClientId || !oauthClientSecret || !oauthRefreshToken) {
+        throw new Error("YouTube reply publishing is not configured: comments.insert requires an OAuth2 access token, which is not set up for this bot");
+      }
+      const accessToken = await getAccessToken();
+      const res = await fetch("https://www.googleapis.com/youtube/v3/comments?part=snippet", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          snippet: {
+            parentId: commentId,
+            textOriginal: replyText
+          }
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(`YouTube API ${res.status}: ${data.error?.message || "comments.insert failed"}`);
+      }
+      return { success: true, commentId: data.id };
     },
 
     async fetchRecentComments() {

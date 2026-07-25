@@ -10,11 +10,27 @@ function requireValue(name, val) {
 }
 
 export function getConfig() {
+  const dryRun = (process.env.DRY_RUN || "true").toLowerCase() === "true";
+
+  const youtubeOauthClientId = process.env.YOUTUBE_OAUTH_CLIENT_ID || "";
+  const youtubeOauthClientSecret = process.env.YOUTUBE_OAUTH_CLIENT_SECRET || "";
+  const youtubeOauthRefreshToken = process.env.YOUTUBE_OAUTH_REFRESH_TOKEN || "";
+  // comments.insert requires OAuth2 (a read-only API key can't write), so
+  // these are only mandatory once the bot is actually allowed to publish.
+  // Requiring them unconditionally would crash-loop the service the moment
+  // DRY_RUN=false ships, before anyone's had a chance to load real creds.
+  if (!dryRun && (!youtubeOauthClientId || !youtubeOauthClientSecret || !youtubeOauthRefreshToken)) {
+    throw new Error("YOUTUBE_OAUTH_CLIENT_ID, YOUTUBE_OAUTH_CLIENT_SECRET, and YOUTUBE_OAUTH_REFRESH_TOKEN are required when DRY_RUN=false");
+  }
+
   return {
     port: parseInt(process.env.PORT || "10000", 10),
     youtubeChannelId: process.env.YOUTUBE_CHANNEL_ID || "@elimfilters9112",
     // Optional: youtube.js already degrades gracefully (returns []) when unset.
     youtubeApiKey: process.env.YOUTUBE_API_KEY || "",
+    youtubeOauthClientId,
+    youtubeOauthClientSecret,
+    youtubeOauthRefreshToken,
     // No hardcoded fallback - a webhook verify token baked into the
     // source is not a secret. GET /webhook now actually checks this
     // value (it didn't before), so it must come from the environment.
@@ -22,6 +38,6 @@ export function getConfig() {
     databaseUrl: requireValue("DATABASE_URL", process.env.DATABASE_URL),
     nvidiaApiKey: process.env.NVIDIA_NIM_API_KEY || "",
     nvidiaModel: process.env.NVIDIA_MODEL || "nvidia/nemotron-3-super-120b-a12b",
-    dryRun: (process.env.DRY_RUN || "true").toLowerCase() === "true"
+    dryRun
   };
 }
