@@ -14,7 +14,7 @@ services:
       - key: YOUTUBE_API_KEY
         sync: false
       - key: YOUTUBE_VERIFY_TOKEN
-        value: elimfilters_youtube_webhook_verify_2026
+        generateValue: true
       - key: NVIDIA_MODEL
         value: nvidia/nemotron-3-super-120b-a12b
       - key: DRY_RUN

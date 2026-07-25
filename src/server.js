@@ -49,10 +49,16 @@ app.get("/review-drafts", async (_req, res) => {
   res.json({ ok: true, dryRun: true, drafts: await db.recentDrafts(10) });
 });
 
-// YouTube Webhook verification / challenge endpoint (PubSubHubbub)
+// YouTube Webhook verification / challenge endpoint (PubSubHubbub).
+// Previously echoed back ANY challenge unconditionally - it never
+// checked youtubeVerifyToken at all, so anyone could "verify" a
+// subscription against this endpoint. Now requires a matching token,
+// same pattern as the Facebook/LinkedIn bots' GET /webhook.
 app.get("/webhook", (req, res) => {
   const challenge = req.query["hub.challenge"] || req.query["challenge"];
-  return res.status(200).send(challenge || "OK");
+  const token = req.query["hub.verify_token"] || req.query["verify_token"] || req.query["token"];
+  if (!challenge || token !== config.youtubeVerifyToken) return res.sendStatus(403);
+  return res.status(200).send(String(challenge));
 });
 
 // YouTube Webhook event receiver
