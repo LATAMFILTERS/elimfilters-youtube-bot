@@ -45,9 +45,9 @@ export function createNvidiaClient({ apiKey, model, pool }) {
 
       if (!apiKey) {
         if (catalogContext) {
-          return `Hola, gracias por comentar en ELIMFILTERS. ${catalogContext.replace(/\n+/g, ' ')} Para más información visita https://part-search.elimfilters.com.`;
+          return `Hola, gracias por comentar en ELIMFILTERS. ${catalogContext.replace(/\n+/g, ' ')} Para más información visita https://elimfilters.com/instagram.`;
         }
-        return `Hola, gracias por comentar en el canal de ELIMFILTERS. Para consultar números de parte y equivalencias, usa nuestro buscador oficial: https://part-search.elimfilters.com. Para más información visita https://elimfilters.com.`;
+        return `Hola, gracias por comentar en el canal de ELIMFILTERS. Para consultar números de parte y equivalencias, usa nuestro buscador oficial: https://elimfilters.com/instagram. Para más información visita https://elimfilters.com.`;
       }
 
       const prompt = `${SYSTEM_PROMPT}\n\n[CONOCIMIENTO BASE OFICIAL]:\n${ELIMFILTERS_KNOWLEDGE}${catalogContext}\n\n[COMENTARIO EN YOUTUBE]: "${userMessage}"\n\nResponde concisamente:`;
@@ -73,10 +73,10 @@ export function createNvidiaClient({ apiKey, model, pool }) {
 
         const data = await res.json();
         const reply = data.choices?.[0]?.message?.content?.trim();
-        return reply || `Gracias por escribir a ELIMFILTERS. Puedes consultar nuestro catálogo en https://part-search.elimfilters.com.`;
+        return reply || `Gracias por escribir a ELIMFILTERS. Puedes consultar nuestro catálogo en https://elimfilters.com/instagram.`;
       } catch (err) {
         console.error("[nvidia-nim]", err.message);
-        return `Gracias por escribir a ELIMFILTERS. Puedes consultar nuestro catálogo en https://part-search.elimfilters.com.`;
+        return `Gracias por escribir a ELIMFILTERS. Puedes consultar nuestro catálogo en https://elimfilters.com/instagram.`;
       }
     }
   };
