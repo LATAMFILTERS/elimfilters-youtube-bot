@@ -26,7 +26,10 @@ export function createWorker({ config, db }) {
       for (const job of jobs) {
         try {
           console.log(`[YouTube Worker] Processing job ${job.comment_id}: "${job.comment_text.slice(0, 50)}..."`);
-          const replyText = await nvidia.generateReply(job.comment_text);
+          const replyText = await nvidia.generateReply(job.comment_text, {
+            conversationId: job.author_channel_id || job.video_id || job.comment_id,
+            authorName: job.author_name
+          });
 
           if (config.dryRun) {
             console.log(`[YouTube Worker] DRY_RUN=true: Draft reply for ${job.comment_id} -> "${replyText}"`);
