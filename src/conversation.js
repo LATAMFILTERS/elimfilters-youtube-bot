@@ -262,218 +262,158 @@ export function createConversationFlow({ storage, master, logger = console }) {
 
   return {
     async processMessage(phoneNumber, messageText, contactName = null) {
-      logger.debug('processMessage START', {
-        phoneNumber,
-        messageText: messageText?.substring(0, 100),
-        contactName
-      });
+      // Detect intent from message
+      const intent = detectIntent(messageText);
 
-      try {
-        // Detect intent from message
-        const intent = detectIntent(messageText);
-        logger.debug('Intent detected', { intent });
+      // Detect customer type (B2B/B2C)
+      const customerType = inferCustomerTypeFromIntent(intent, messageText);
 
-        // Detect customer type (B2B/B2C)
-        const customerType = inferCustomerTypeFromIntent(intent, messageText);
-        logger.debug('Customer type detected', { customerType });
-
-        // Get or create contact
-        let contact = await storage.getContact(phoneNumber);
-        logger.debug('Contact retrieved', { contactExists: !!contact });
-
-        if (!contact) {
-          logger.debug('Creating new contact');
-          contact = await storage.saveContact(phoneNumber, {
-            phoneNumber,
-            name: contactName,
-            state: CONVERSATION_STATES.GREETING,
-            intent,
-            customerType,
-            suggestedAgent: getSuggestedAgent(intent),
-            messages: []
-          });
-          logger.debug('Contact created', { state: contact.state });
-        } else {
-          // Update intent, customer type and suggested agent if it's a new message
-          logger.debug('Updating existing contact');
-          await storage.saveContact(phoneNumber, {
-            intent,
-            customerType,
-            suggestedAgent: getSuggestedAgent(intent)
-          });
-        }
-
-        // Add message to history with intent
-        logger.debug('Adding incoming message to history');
-        await storage.addMessage(phoneNumber, {
-          type: 'incoming',
-          body: messageText,
-          intent
-        });
-        logger.debug('Message added to history');
-
-        // Refresh contact to get updated message history
-        contact = await storage.getContact(phoneNumber);
-        logger.debug('Contact refreshed', {
-          messageCount: contact?.messages?.length || 0
-        });
-
-        // Determine current and next state
-        const currentState = contact.state || CONVERSATION_STATES.GREETING;
-        logger.debug('Current state', { state: currentState });
-
-        let nextState = getNextState(currentState, messageText, contact);
-        logger.debug('Next state calculated', { nextState });
-
-        // Use next state if transitioning (e.g., for recommendations after historical questions)
-        const stateForResponse = (nextState !== currentState) ? nextState : currentState;
-        logger.debug('State for response', {
-          isTransitioning: nextState !== currentState,
-          stateForResponse
-        });
-
-        // Determine response based on state
-        logger.debug('Getting response for state', { state: stateForResponse });
-        let responseText = await getResponseForState(stateForResponse, contact.name, messageText, contact);
-        logger.debug('Response generated', {
-          responseLength: responseText?.length || 0
-        });
-
-        // Check for technical "what if" questions at ANY point in conversation
-        logger.debug('Checking for technical question');
-        const technicalRisk = detectTechnicalQuestion(messageText);
-        if (technicalRisk) {
-          logger.debug('Technical question detected', { technicalRisk });
-          // Get detailed technical knowledge for this risk
-          const knowledge = getKnowledgeForRisk(technicalRisk);
-
-          if (knowledge) {
-            logger.debug('Knowledge found for technical risk', { problem: knowledge.problem });
-            // Build expert technical response
-            let technicalResponse = `**${knowledge.problem}**\n\n`;
-
-            if (knowledge.causes && knowledge.causes.length > 0) {
-              technicalResponse += `**Causas principales:**\n`;
-              knowledge.causes.slice(0, 3).forEach(cause => {
-                technicalResponse += `• ${cause}\n`;
-              });
-              technicalResponse += `\n`;
-            }
-
-            if (knowledge.consequences && knowledge.consequences.length > 0) {
-              technicalResponse += `**Consecuencias:**\n`;
-              knowledge.consequences.slice(0, 3).forEach(consequence => {
-                technicalResponse += `• ${consequence}\n`;
-              });
-              technicalResponse += `\n`;
-            }
-
-            if (knowledge.symptoms && knowledge.symptoms.length > 0) {
-              technicalResponse += `**Síntomas que notarías:**\n`;
-              knowledge.symptoms.slice(0, 2).forEach(symptom => {
-                technicalResponse += `• ${symptom}\n`;
-              });
-              technicalResponse += `\n`;
-            }
-
-            if (knowledge.howItWorks) {
-              technicalResponse += `**Cómo se resuelve:**\n${knowledge.howItWorks}\n\n`;
-            }
-
-            if (knowledge.costImpact) {
-              technicalResponse += `**Impacto económico sin solución:**\n`;
-              for (const [key, value] of Object.entries(knowledge.costImpact)) {
-                if (typeof value === 'string') {
-                  const cleanKey = key.replace(/([A-Z])/g, ' $1').toLowerCase().trim();
-                  technicalResponse += `• ${cleanKey}: ${value}\n`;
-                }
-              }
-              technicalResponse += `\n`;
-            }
-
-            technicalResponse += `¿Te interesa conocer la solución que ofrecemos?`;
-
-            responseText = technicalResponse;
-            // Don't progress state - stay here so they can ask more technical questions
-            nextState = currentState;
-
-            logger.info('Technical question answered with expert knowledge', {
-              phoneNumber,
-              technicalRisk,
-              knowledge: knowledge.problem
-            });
-          }
-        }
-        // Handle technical specification questions during HANDOFF_TO_TEAM
-        else if (currentState === CONVERSATION_STATES.HANDOFF_TO_TEAM) {
-          logger.debug('Checking for specification request in HANDOFF_TO_TEAM state');
-          const specFields = detectSpecificationRequest(messageText);
-          if (specFields.length > 0) {
-            // Extract recommended SKU from recent conversation history
-            const recommendedSKU = extractRecommendedSKU(contact.messages);
-            if (recommendedSKU) {
-              logger.debug('SKU found, handling specification question', { sku: recommendedSKU });
-              // Customer asking about technical specs of recommended product
-              const specResponse = await handleSpecificationQuestion(recommendedSKU, messageText, logger);
-              if (specResponse) {
-                responseText = specResponse + '\n\n' + responseText;
-                logger.info('Technical specification question answered', {
-                  phoneNumber,
-                  sku: recommendedSKU,
-                  requested_specs: specFields
-                });
-              }
-            }
-          }
-        }
-
-        logger.debug('Preparing to save response and update state', {
-          responseLength: responseText?.length || 0,
-          nextState
-        });
-
-        // Add response to history
-        logger.debug('Adding outgoing message to history');
-        await storage.addMessage(phoneNumber, {
-          type: 'outgoing',
-          body: responseText,
-          intent
-        });
-        logger.debug('Outgoing message added');
-
-        // Update state for next message
-        logger.debug('Updating contact state', { nextState });
-        await storage.updateContactState(phoneNumber, nextState);
-        logger.debug('Contact state updated');
-
-        // Get lead info if needed (to eventually pass to agent)
-        logger.debug('Fetching lead info from master');
-        const leadInfo = await master.getLeadInfo(phoneNumber);
-        logger.debug('Lead info fetched', { hasLeadInfo: !!leadInfo });
-
-        logger.debug('processMessage SUCCESS', {
+      // Get or create contact
+      let contact = await storage.getContact(phoneNumber);
+      if (!contact) {
+        contact = await storage.saveContact(phoneNumber, {
           phoneNumber,
-          state: nextState,
-          responseLength: responseText?.length || 0
-        });
-
-        return {
-          response: responseText,
-          state: nextState,
+          name: contactName,
+          state: CONVERSATION_STATES.GREETING,
           intent,
           customerType,
           suggestedAgent: getSuggestedAgent(intent),
-          contact,
-          leadInfo
-        };
-      } catch (error) {
-        logger.error('processMessage FAILED', {
-          phoneNumber,
-          error: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined
+          messages: []
         });
-        throw error;
+      } else {
+        // Update intent, customer type and suggested agent if it's a new message
+        await storage.saveContact(phoneNumber, {
+          intent,
+          customerType,
+          suggestedAgent: getSuggestedAgent(intent)
+        });
       }
+
+      // Add message to history with intent
+      await storage.addMessage(phoneNumber, {
+        type: 'incoming',
+        body: messageText,
+        intent
+      });
+
+      // Refresh contact to get updated message history
+      contact = await storage.getContact(phoneNumber);
+
+      // Determine current and next state
+      const currentState = contact.state || CONVERSATION_STATES.GREETING;
+      let nextState = getNextState(currentState, messageText, contact);
+
+      // Use next state if transitioning (e.g., for recommendations after historical questions)
+      const stateForResponse = (nextState !== currentState) ? nextState : currentState;
+
+      // Determine response based on state
+      let responseText = await getResponseForState(stateForResponse, contact.name, messageText, contact);
+
+      // Check for technical "what if" questions at ANY point in conversation
+      const technicalRisk = detectTechnicalQuestion(messageText);
+      if (technicalRisk) {
+        // Get detailed technical knowledge for this risk
+        const knowledge = getKnowledgeForRisk(technicalRisk);
+
+        if (knowledge) {
+          // Build expert technical response
+          let technicalResponse = `**${knowledge.problem}**\n\n`;
+
+          if (knowledge.causes && knowledge.causes.length > 0) {
+            technicalResponse += `**Causas principales:**\n`;
+            knowledge.causes.slice(0, 3).forEach(cause => {
+              technicalResponse += `• ${cause}\n`;
+            });
+            technicalResponse += `\n`;
+          }
+
+          if (knowledge.consequences && knowledge.consequences.length > 0) {
+            technicalResponse += `**Consecuencias:**\n`;
+            knowledge.consequences.slice(0, 3).forEach(consequence => {
+              technicalResponse += `• ${consequence}\n`;
+            });
+            technicalResponse += `\n`;
+          }
+
+          if (knowledge.symptoms && knowledge.symptoms.length > 0) {
+            technicalResponse += `**Síntomas que notarías:**\n`;
+            knowledge.symptoms.slice(0, 2).forEach(symptom => {
+              technicalResponse += `• ${symptom}\n`;
+            });
+            technicalResponse += `\n`;
+          }
+
+          if (knowledge.howItWorks) {
+            technicalResponse += `**Cómo se resuelve:**\n${knowledge.howItWorks}\n\n`;
+          }
+
+          if (knowledge.costImpact) {
+            technicalResponse += `**Impacto económico sin solución:**\n`;
+            for (const [key, value] of Object.entries(knowledge.costImpact)) {
+              if (typeof value === 'string') {
+                const cleanKey = key.replace(/([A-Z])/g, ' $1').toLowerCase().trim();
+                technicalResponse += `• ${cleanKey}: ${value}\n`;
+              }
+            }
+            technicalResponse += `\n`;
+          }
+
+          technicalResponse += `¿Te interesa conocer la solución que ofrecemos?`;
+
+          responseText = technicalResponse;
+          // Don't progress state - stay here so they can ask more technical questions
+          nextState = currentState;
+
+          logger.info('Technical question answered with expert knowledge', {
+            phoneNumber,
+            technicalRisk,
+            knowledge: knowledge.problem
+          });
+        }
+      }
+      // Handle technical specification questions during HANDOFF_TO_TEAM
+      else if (currentState === CONVERSATION_STATES.HANDOFF_TO_TEAM) {
+        const specFields = detectSpecificationRequest(messageText);
+        if (specFields.length > 0) {
+          // Extract recommended SKU from recent conversation history
+          const recommendedSKU = extractRecommendedSKU(contact.messages);
+          if (recommendedSKU) {
+            // Customer asking about technical specs of recommended product
+            const specResponse = await handleSpecificationQuestion(recommendedSKU, messageText, logger);
+            if (specResponse) {
+              responseText = specResponse + '\n\n' + responseText;
+              logger.info('Technical specification question answered', {
+                phoneNumber,
+                sku: recommendedSKU,
+                requested_specs: specFields
+              });
+            }
+          }
+        }
+      }
+
+      // Add response to history
+      await storage.addMessage(phoneNumber, {
+        type: 'outgoing',
+        body: responseText,
+        intent
+      });
+
+      // Update state for next message
+      await storage.updateContactState(phoneNumber, nextState);
+
+      // Get lead info if needed (to eventually pass to agent)
+      const leadInfo = await master.getLeadInfo(phoneNumber);
+
+      return {
+        response: responseText,
+        state: nextState,
+        intent,
+        customerType,
+        suggestedAgent: getSuggestedAgent(intent),
+        contact,
+        leadInfo
+      };
     },
 
     async getConversationSummary(phoneNumber) {
