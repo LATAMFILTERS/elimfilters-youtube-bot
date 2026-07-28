@@ -103,11 +103,11 @@ export function extractRisksFromMessage(messageText) {
     [RISK_TYPES.PARTICULATE]: ['particula', 'particulado', 'particulado', 'polvo fino'],
     [RISK_TYPES.ODOR]: ['olor', 'olor fuerte', 'hedor', 'apestoso'],
     [RISK_TYPES.SCALE]: ['sarro', 'incrustacion', 'incrustación', 'escala', 'calcificacion', 'calcificación', 'deposito mineral'],
-    [RISK_TYPES.WATER_IN_FUEL]: ['agua en diesel', 'agua en diésel', 'agua en gasolina', 'agua en combustible', 'agua diesel', 'agua diésel', 'condensacion en combustible', 'agua en fuel', 'humedad en diesel', 'humedad en diésel', 'agua mezcla diesel', 'agua mezcla diésel'],
+    [RISK_TYPES.WATER_IN_FUEL]: ['agua en diesel', 'agua en diésel', 'agua en gasolina', 'agua en combustible', 'agua diesel', 'agua diésel', 'condensacion en combustible', 'agua en fuel', 'humedad en diesel', 'humedad en diésel'],
     [RISK_TYPES.FUEL_CONTAMINATION]: ['combustible contaminado', 'diesel contaminado', 'gasolina contaminada', 'fuel system contamination'],
     [RISK_TYPES.INJECTOR_DAMAGE]: ['daño de inyector', 'inyectores dañados', 'falla de inyector', 'inyectores tapados', 'corrosión de inyector'],
     [RISK_TYPES.ENGINE_POWER_LOSS]: ['pérdida de potencia', 'perdida de potencia', 'motor pierde potencia', 'falta de potencia', 'motor débil'],
-    [RISK_TYPES.DIESEL_WATER]: ['agua en diesel', 'agua en diésel', 'mezcla de agua y diesel', 'diesel con agua'],
+    [RISK_TYPES.DIESEL_WATER]: ['agua en diesel', 'agua en diésel'],
     [RISK_TYPES.FUEL_SYSTEM_FAILURE]: ['fallo de combustible', 'fallo del motor', 'parada del motor', 'motor se para', 'motor muere']
   };
 
@@ -116,6 +116,13 @@ export function extractRisksFromMessage(messageText) {
     if (keywords.some(keyword => normalized.includes(keyword))) {
       detectedRisks.push(riskType);
     }
+  }
+
+  // Special flexible matching for water + fuel combinations
+  const hasWater = /agua|humedad|condensacion|condensación/.test(normalized);
+  const hasFuel = /diésel|diesel|combustible|fuel|gasolina|nafta|motor/.test(normalized);
+  if (hasWater && hasFuel && !detectedRisks.includes(RISK_TYPES.WATER_IN_FUEL)) {
+    detectedRisks.push(RISK_TYPES.WATER_IN_FUEL);
   }
 
   // Special compound detection for water-in-fuel: if message contains both "agua" and ("diésel"|"diesel"|"combustible")
