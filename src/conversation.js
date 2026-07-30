@@ -364,8 +364,15 @@ Nuestros sistemas están diseñados para operaciones industriales, transporte y 
         else {
           logger.debug('Checking for technical question');
           const technicalRisk = detectTechnicalQuestion(messageText);
-          if (technicalRisk) {
-          logger.debug('Technical question detected', { technicalRisk });
+
+          // Also check if it's ANY question (regardless of keywords)
+          const isQuestion = /qué|cuál|cuáles|cómo|por qué|why|how|what|which/i.test(messageText);
+
+          // Consult Knowledge Engine if: has risk keywords OR is a question
+          const shouldQueryKnowledge = technicalRisk || isQuestion;
+
+          if (shouldQueryKnowledge) {
+          logger.debug('Potential technical question detected', { technicalRisk, isQuestion });
 
           // Try Knowledge Engine first for technical questions
           let technicalResponse = null;
