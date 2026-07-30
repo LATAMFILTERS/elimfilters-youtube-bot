@@ -366,64 +366,95 @@ Nuestros sistemas están diseñados para operaciones industriales, transporte y 
           const technicalRisk = detectTechnicalQuestion(messageText);
           if (technicalRisk) {
           logger.debug('Technical question detected', { technicalRisk });
-          // Get detailed technical knowledge for this risk
-          const knowledge = getKnowledgeForRisk(technicalRisk);
 
-          if (knowledge) {
-            logger.debug('Knowledge found for technical risk', { problem: knowledge.problem });
-            // Build expert technical response
-            let technicalResponse = `**${knowledge.problem}**\n\n`;
+          // Try Knowledge Engine first for technical questions
+          let technicalResponse = null;
+          if (knowledgeSystem && contact?.id && contact?.authorChannelId) {
+            try {
+              logger.debug('Querying Knowledge Engine for technical question');
+              const engineResponse = await knowledgeSystem.getKnowledgeResponse(
+                messageText,
+                contact.id || contact.authorChannelId,
+                contact.authorChannelId
+              );
 
-            if (knowledge.causes && knowledge.causes.length > 0) {
-              technicalResponse += `**Causas principales:**\n`;
-              knowledge.causes.slice(0, 3).forEach(cause => {
-                technicalResponse += `• ${cause}\n`;
-              });
-              technicalResponse += `\n`;
-            }
-
-            if (knowledge.consequences && knowledge.consequences.length > 0) {
-              technicalResponse += `**Consecuencias:**\n`;
-              knowledge.consequences.slice(0, 3).forEach(consequence => {
-                technicalResponse += `• ${consequence}\n`;
-              });
-              technicalResponse += `\n`;
-            }
-
-            if (knowledge.symptoms && knowledge.symptoms.length > 0) {
-              technicalResponse += `**Síntomas que notarías:**\n`;
-              knowledge.symptoms.slice(0, 2).forEach(symptom => {
-                technicalResponse += `• ${symptom}\n`;
-              });
-              technicalResponse += `\n`;
-            }
-
-            if (knowledge.howItWorks) {
-              technicalResponse += `**Cómo se resuelve:**\n${knowledge.howItWorks}\n\n`;
-            }
-
-            if (knowledge.costImpact) {
-              technicalResponse += `**Impacto económico sin solución:**\n`;
-              for (const [key, value] of Object.entries(knowledge.costImpact)) {
-                if (typeof value === 'string') {
-                  const cleanKey = key.replace(/([A-Z])/g, ' $1').toLowerCase().trim();
-                  technicalResponse += `• ${cleanKey}: ${value}\n`;
-                }
+              if (engineResponse.success && engineResponse.answer) {
+                logger.info('Knowledge Engine provided technical answer', {
+                  channelId: contact.authorChannelId,
+                  technicalRisk,
+                  source: 'KNOWLEDGE_ENGINE'
+                });
+                technicalResponse = engineResponse.answer;
+              } else {
+                logger.debug('Knowledge Engine had no answer, falling back to hardcoded knowledge');
               }
-              technicalResponse += `\n`;
+            } catch (error) {
+              logger.error('Knowledge Engine query failed, using fallback:', error.message);
             }
+          }
 
-            technicalResponse += `¿Te interesa conocer la solución que ofrecemos?`;
+          // Fallback to hardcoded knowledge if Knowledge Engine unavailable/failed
+          if (!technicalResponse) {
+            const knowledge = getKnowledgeForRisk(technicalRisk);
 
+            if (knowledge) {
+              logger.debug('Knowledge found for technical risk', { problem: knowledge.problem });
+              // Build expert technical response
+              technicalResponse = `**${knowledge.problem}**\n\n`;
+
+              if (knowledge.causes && knowledge.causes.length > 0) {
+                technicalResponse += `**Causas principales:**\n`;
+                knowledge.causes.slice(0, 3).forEach(cause => {
+                  technicalResponse += `• ${cause}\n`;
+                });
+                technicalResponse += `\n`;
+              }
+
+              if (knowledge.consequences && knowledge.consequences.length > 0) {
+                technicalResponse += `**Consecuencias:**\n`;
+                knowledge.consequences.slice(0, 3).forEach(consequence => {
+                  technicalResponse += `• ${consequence}\n`;
+                });
+                technicalResponse += `\n`;
+              }
+
+              if (knowledge.symptoms && knowledge.symptoms.length > 0) {
+                technicalResponse += `**Síntomas que notarías:**\n`;
+                knowledge.symptoms.slice(0, 2).forEach(symptom => {
+                  technicalResponse += `• ${symptom}\n`;
+                });
+                technicalResponse += `\n`;
+              }
+
+              if (knowledge.howItWorks) {
+                technicalResponse += `**Cómo se resuelve:**\n${knowledge.howItWorks}\n\n`;
+              }
+
+              if (knowledge.costImpact) {
+                technicalResponse += `**Impacto económico sin solución:**\n`;
+                for (const [key, value] of Object.entries(knowledge.costImpact)) {
+                  if (typeof value === 'string') {
+                    const cleanKey = key.replace(/([A-Z])/g, ' $1').toLowerCase().trim();
+                    technicalResponse += `• ${cleanKey}: ${value}\n`;
+                  }
+                }
+                technicalResponse += `\n`;
+              }
+
+              technicalResponse += `¿Te interesa conocer la solución que ofrecemos?`;
+
+              logger.info('Technical question answered with hardcoded knowledge', {
+                channelId: contact.authorChannelId,
+                technicalRisk,
+                knowledge: knowledge.problem
+              });
+            }
+          }
+
+          if (technicalResponse) {
             responseText = technicalResponse;
             // Don't progress state - stay here so they can ask more technical questions
             nextState = currentState;
-
-            logger.info('Technical question answered with expert knowledge', {
-              phoneNumber,
-              technicalRisk,
-              knowledge: knowledge.problem
-            });
           }
           }
         }
