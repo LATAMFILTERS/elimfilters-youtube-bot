@@ -93,7 +93,7 @@ export function extractRisksFromMessage(messageText) {
   const detectedRisks = [];
 
   const riskKeywords = {
-    [RISK_TYPES.CONTAMINATION]: ['contamina', 'contaminacion', 'sucio', 'impuro', 'contaminante'],
+    [RISK_TYPES.CONTAMINATION]: ['contamina', 'contaminacion', 'sucio', 'impuro', 'contaminante', 'aceite', 'aceites', 'filtro', 'filtros'],
     [RISK_TYPES.PARTICLES]: ['particula', 'particulado', 'polvo', 'sedimento', 'arena', 'particulado'],
     [RISK_TYPES.MICROORGANISMS]: ['bacteria', 'virus', 'microorganismo', 'hongo', 'moho', 'biologico'],
     [RISK_TYPES.CORROSION]: ['corrosion', 'corrosión', 'oxido', 'oxidacion', 'oxidación', 'herrumbre', 'oxidado'],
