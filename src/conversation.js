@@ -64,7 +64,7 @@ function extractRecommendedSKU(messages = []) {
   return null;
 }
 
-export function createConversationFlow({ storage, master, logger = console }) {
+export function createConversationFlow({ storage, master, knowledgeSystem, logger = console }) {
   async function getResponseForState(state, contactName, messageText, contact = {}) {
     // Detect assets and risks mentioned in the current message
     const detectedAssets = messageText ? extractAssetsFromMessage(messageText) : [];
