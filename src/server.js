@@ -3,12 +3,14 @@ import { getConfig } from "./config.js";
 import { createDb } from "./db.js";
 import { normalizeYoutubeEvents } from "./security.js";
 import { createWorker } from "./worker.js";
+import { createKnowledgeSystemClient } from "./knowledge-system.js";
 
 const config = getConfig();
 const db = createDb(config.databaseUrl);
 await db.init();
+const knowledgeSystem = createKnowledgeSystemClient(config);
 
-const worker = createWorker({ config, db });
+const worker = createWorker({ config, db, knowledgeSystem });
 const app = express();
 
 const webhookStats = {
