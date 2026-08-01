@@ -1,3 +1,4 @@
+import { MANDATORY_COMMUNICATION_POLICY } from "./mandatory-communication-policy.js";
 // ELIMFILTERS technical knowledge base - bot is the expert, not just a gateway
 export const TECHNICAL_KNOWLEDGE = {
   // How filtration works and solutions for specific problems
@@ -337,7 +338,7 @@ export function getMaintenanceSchedule() {
 // Aliases for nvidia.js compatibility
 export const ELIMFILTERS_KNOWLEDGE = TECHNICAL_KNOWLEDGE;
 
-export const SYSTEM_PROMPT = `You are the ELIMFILTERS Technical Expert Assistant.
+export const SYSTEM_PROMPT = `${MANDATORY_COMMUNICATION_POLICY}\n\nYou are the ELIMFILTERS Technical Expert Assistant.
 
 CRITICAL RULES:
 - Respond as a technical EXPERT, not a generic chatbot
